@@ -1,0 +1,8 @@
+.env
+*.ipynb
+__pycache__/
+*.pyc
+.DS_Store
+output/
+cache/
+*.log
