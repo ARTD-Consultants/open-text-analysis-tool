@@ -3,26 +3,20 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Any
-import uuid
 
 
 @dataclass
 class AnalysisResult:
     """Represents the analysis result for a single text entry."""
     
-    entry_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     original_text: str = ""
     summary: str = ""
     themes: List[str] = field(default_factory=list)  # Final consolidated themes
     theme_confidences: Dict[str, float] = field(default_factory=dict)
     original_themes: List[str] = field(default_factory=list)  # Raw AI-extracted themes
     original_theme_confidences: Dict[str, float] = field(default_factory=dict)  # Original confidences
-    sentiment_score: Optional[float] = None
-    sentiment_label: Optional[str] = None
-    emotion_score: Optional[float] = None
-    emotion_label: Optional[str] = None
+    consolidated_themes: List[str] = field(default_factory=list)  # Post-consolidation themes
     processing_timestamp: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
     
     def add_original_theme(self, theme_name: str, confidence: float = 1.0) -> None:
         """Add an original AI-extracted theme."""
@@ -35,6 +29,11 @@ class AnalysisResult:
         if theme_name not in self.themes:
             self.themes.append(theme_name)
         self.theme_confidences[theme_name] = confidence
+    
+    def add_consolidated_theme(self, theme_name: str) -> None:
+        """Add a post-consolidation theme."""
+        if theme_name not in self.consolidated_themes:
+            self.consolidated_themes.append(theme_name)
     
     def apply_consolidation_limits(self, max_themes_per_entry: int, min_confidence: float = 0.6) -> None:
         """Apply per-entry limits to consolidated themes."""
@@ -77,19 +76,14 @@ class AnalysisResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "entry_id": self.entry_id,
             "original_text": self.original_text,
             "summary": self.summary,
             "themes": self.themes,
             "theme_confidences": self.theme_confidences,
             "original_themes": self.original_themes,
             "original_theme_confidences": self.original_theme_confidences,
-            "sentiment_score": self.sentiment_score,
-            "sentiment_label": self.sentiment_label,
-            "emotion_score": self.emotion_score,
-            "emotion_label": self.emotion_label,
-            "processing_timestamp": self.processing_timestamp.isoformat(),
-            "metadata": self.metadata
+            "consolidated_themes": self.consolidated_themes,
+            "processing_timestamp": self.processing_timestamp.isoformat()
         }
 
 
@@ -97,14 +91,12 @@ class AnalysisResult:
 class BatchResult:
     """Represents the results from processing a batch of texts."""
     
-    batch_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     results: List[AnalysisResult] = field(default_factory=list)
     processing_start: datetime = field(default_factory=datetime.now)
     processing_end: Optional[datetime] = None
     tokens_used: int = 0
     api_calls: int = 0
     errors: List[str] = field(default_factory=list)
-    batch_metadata: Dict[str, Any] = field(default_factory=dict)
     
     def add_result(self, result: AnalysisResult) -> None:
         """Add an analysis result to this batch."""
@@ -147,7 +139,6 @@ class BatchResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "batch_id": self.batch_id,
             "results": [result.to_dict() for result in self.results],
             "processing_start": self.processing_start.isoformat(),
             "processing_end": self.processing_end.isoformat() if self.processing_end else None,
@@ -157,8 +148,7 @@ class BatchResult:
             "errors": self.errors,
             "themes_summary": self.get_themes_summary(),
             "average_confidence": self.get_average_confidence(),
-            "success_rate": self.get_success_rate(),
-            "batch_metadata": self.batch_metadata
+            "success_rate": self.get_success_rate()
         }
 
 
@@ -166,15 +156,12 @@ class BatchResult:
 class AnalysisSession:
     """Represents a complete analysis session with multiple batches."""
     
-    session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     session_start: datetime = field(default_factory=datetime.now)
     session_end: Optional[datetime] = None
     batches: List[BatchResult] = field(default_factory=list)
-    configuration: Dict[str, Any] = field(default_factory=dict)
     total_entries: int = 0
     total_tokens_used: int = 0
     total_api_calls: int = 0
-    session_metadata: Dict[str, Any] = field(default_factory=dict)
     
     def add_batch(self, batch: BatchResult) -> None:
         """Add a batch result to this session."""
@@ -213,7 +200,6 @@ class AnalysisSession:
         all_results = self.get_all_results()
         
         return {
-            "session_id": self.session_id,
             "total_batches": len(self.batches),
             "total_entries": len(all_results),
             "total_tokens_used": self.total_tokens_used,

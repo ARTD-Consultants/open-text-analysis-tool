@@ -42,12 +42,6 @@ Examples:
   
   # Generate comprehensive report
   analyze data.xlsx -t response --report
-  
-  # Test connection
-  test-connection
-  
-  # Preview data file
-  preview data.xlsx
         """
     )
     
@@ -70,24 +64,11 @@ Examples:
                                help='Disable caching')
     analyze_parser.add_argument('--no-similarity', action='store_true',
                                help='Disable theme similarity checking')
+    analyze_parser.add_argument('--final-theme-count', type=int, default=10,
+                               help='Number of final consolidated themes (default: 10)')
+    analyze_parser.add_argument('--no-consolidation', action='store_true',
+                               help='Disable GPT-4 theme consolidation')
     
-    # Preview command
-    preview_parser = subparsers.add_parser('preview', help='Preview data file')
-    preview_parser.add_argument('input_file', help='Input file path')
-    preview_parser.add_argument('-n', '--rows', type=int, default=5,
-                               help='Number of rows to preview')
-    preview_parser.add_argument('-t', '--text-column',
-                               help='Text column to analyze')
-    
-    # Test connection command
-    test_parser = subparsers.add_parser('test-connection', 
-                                       help='Test connection to OpenAI services')
-    
-    # Validate command
-    validate_parser = subparsers.add_parser('validate', help='Validate input file')
-    validate_parser.add_argument('input_file', help='Input file path')
-    validate_parser.add_argument('-t', '--text-column', required=True,
-                                help='Column containing text to analyze')
     
     # Config command
     config_parser = subparsers.add_parser('config', help='Configuration management')
@@ -118,6 +99,12 @@ def command_analyze(args, settings: Settings):
         return 1
     
     try:
+        # Override settings with command-line arguments
+        if hasattr(args, 'final_theme_count'):
+            settings.final_theme_count = args.final_theme_count
+        if hasattr(args, 'no_consolidation'):
+            settings.enable_theme_consolidation = not args.no_consolidation
+        
         # Create analyzer
         analyzer = QualitativeAnalyzer(
             settings=settings,
@@ -125,15 +112,6 @@ def command_analyze(args, settings: Settings):
             enable_theme_similarity=not args.no_similarity
         )
         
-        # Test connection first
-        print("Testing connection to OpenAI services...")
-        connection_status = analyzer.test_connection()
-        
-        if not connection_status['openai_connection']:
-            print("❌ Failed to connect to OpenAI. Please check your configuration.")
-            return 1
-        
-        print("✅ Connection successful")
         
         # Progress callback
         def progress_callback(completed: int, total: int):
@@ -162,25 +140,39 @@ def command_analyze(args, settings: Settings):
         theme_summary = session.get_global_theme_summary()
         print("\\n🏷️  Top Themes:")
         sorted_themes = sorted(theme_summary.items(), key=lambda x: x[1], reverse=True)
-        for i, (theme_name, count) in enumerate(sorted_themes[:5], 1):
+        top_count = settings.top_themes_display_count
+        for i, (theme_name, count) in enumerate(sorted_themes[:top_count], 1):
             print(f"  {i}. {theme_name} ({count} occurrences)")
         
         # Generate report if requested
         if args.report:
             print("\\n📄 Generating comprehensive report...")
-            report_files = analyzer.generate_comprehensive_report(args.report_title)
+            report_files = analyzer.generate_simple_report(args.report_title)
             
             print("Reports generated:")
             for report_type, file_path in report_files.items():
                 print(f"  • {report_type.capitalize()}: {file_path}")
         
-        # Show suggestions
-        suggestions = analyzer.suggest_theme_merges(max_suggestions=5)
-        if suggestions:
-            print("\\n💡 Theme merge suggestions:")
-            for suggestion in suggestions:
-                print(f"  • Merge '{suggestion['theme1']}' with '{suggestion['theme2']}' "
-                     f"(similarity: {suggestion['similarity']:.2f})")
+        # Show consolidated theme statistics if consolidation was enabled
+        all_results = session.get_all_results()
+        if all_results and all_results[0].consolidated_themes:
+            # Count consolidated themes
+            consolidated_theme_counts = {}
+            for result in all_results:
+                for theme in result.consolidated_themes:
+                    consolidated_theme_counts[theme] = consolidated_theme_counts.get(theme, 0) + 1
+            
+            print("\\n📊 Top Consolidated Themes:")
+            sorted_consolidated = sorted(consolidated_theme_counts.items(), key=lambda x: x[1], reverse=True)
+            for i, (theme_name, count) in enumerate(sorted_consolidated[:settings.top_themes_display_count], 1):
+                print(f"  {i}. {theme_name} ({count} occurrences)")
+            
+            print(f"\\n📈 Theme consolidation: {len(theme_summary)} original → {len(consolidated_theme_counts)} consolidated themes")
+        
+        # Show theme statistics
+        theme_summary = session.get_global_theme_summary()
+        if len(theme_summary) > settings.theme_threshold_for_display:
+            print(f"\\n📈 Found {len(theme_summary)} unique original themes total")
         
         if args.output:
             print(f"\\n✅ Results saved to: {args.output}")
@@ -194,123 +186,6 @@ def command_analyze(args, settings: Settings):
         return 1
 
 
-def command_preview(args, settings: Settings):
-    """Handle preview command."""
-    try:
-        from qualitative_analyzer.services.data_loader import DataLoader
-        
-        loader = DataLoader()
-        preview_info = loader.preview_data(
-            args.input_file, 
-            args.rows, 
-            args.text_column
-        )
-        
-        if 'error' in preview_info:
-            print(f"❌ Preview failed: {preview_info['error']}")
-            return 1
-        
-        print(f"📄 File Preview: {args.input_file}")
-        print(f"Size: {preview_info['file_size_mb']} MB")
-        print(f"Columns ({preview_info['column_count']}): {', '.join(preview_info['columns'])}")
-        
-        if 'text_analysis' in preview_info:
-            text_analysis = preview_info['text_analysis']
-            print(f"\\n📝 Text Analysis (column: {args.text_column}):")
-            print(f"Average length: {text_analysis['avg_length']:.1f} characters")
-            
-            print("\\nSample texts:")
-            for i, text in enumerate(text_analysis['sample_texts'], 1):
-                preview_text = text[:100] + "..." if len(text) > 100 else text
-                print(f"  {i}. {preview_text}")
-        
-        print("\\n🔍 Column Suggestions:")
-        suggestions = loader.get_column_suggestions(args.input_file)
-        if 'text_columns' in suggestions:
-            print(f"Likely text columns: {', '.join(suggestions['text_columns'])}")
-        if 'id_columns' in suggestions:
-            print(f"Likely ID columns: {', '.join(suggestions['id_columns'])}")
-        
-        return 0
-        
-    except Exception as e:
-        print(f"❌ Preview failed: {str(e)}")
-        return 1
-
-
-def command_test_connection(args, settings: Settings):
-    """Handle test-connection command."""
-    try:
-        print("🔗 Testing connection to OpenAI services...")
-        
-        analyzer = QualitativeAnalyzer(settings=settings)
-        connection_status = analyzer.test_connection()
-        
-        print("\\nConnection Status:")
-        print(f"  • OpenAI API: {'✅ Connected' if connection_status['openai_connection'] else '❌ Failed'}")
-        print(f"  • Caching: {'✅ Available' if connection_status['cache_available'] else '❌ Disabled'}")
-        print(f"  • Embeddings: {'✅ Available' if connection_status['embeddings_available'] else '❌ Disabled'}")
-        
-        if connection_status['openai_connection']:
-            # Get usage statistics
-            stats = analyzer.openai_client.get_usage_statistics()
-            print(f"\\n📊 API Statistics:")
-            print(f"  • Total requests: {stats['total_requests']}")
-            print(f"  • Success rate: {stats['success_rate']:.1%}")
-            
-            print("\\n🎉 Connection test successful!")
-            return 0
-        else:
-            print("\\n❌ Connection test failed. Please check your configuration.")
-            return 1
-            
-    except Exception as e:
-        print(f"❌ Connection test failed: {str(e)}")
-        return 1
-
-
-def command_validate(args, settings: Settings):
-    """Handle validate command."""
-    try:
-        print(f"🔍 Validating file: {args.input_file}")
-        
-        # Basic file validation
-        is_valid, error_msg = validate_input_file(args.input_file, [args.text_column])
-        
-        if not is_valid:
-            print(f"❌ Validation failed: {error_msg}")
-            return 1
-        
-        # Load and validate data quality
-        from qualitative_analyzer.services.data_loader import DataLoader
-        
-        loader = DataLoader()
-        df, metadata = loader.load_data(args.input_file, args.text_column)
-        
-        print(f"✅ File validation successful!")
-        print(f"\\n📊 Data Quality Report:")
-        
-        quality = metadata['data_quality']
-        print(f"  • Total entries: {quality['total_entries']}")
-        print(f"  • Valid entries: {quality['valid_entries']} ({quality['valid_percentage']:.1f}%)")
-        print(f"  • Quality score: {quality['quality_score']:.1f}/100")
-        
-        if quality['missing_entries'] > 0:
-            print(f"  • Missing entries: {quality['missing_entries']}")
-        if quality['empty_entries'] > 0:
-            print(f"  • Empty entries: {quality['empty_entries']}")
-        
-        # Show recommendations
-        if quality['recommendations']:
-            print(f"\\n💡 Recommendations:")
-            for rec in quality['recommendations']:
-                print(f"  • {rec}")
-        
-        return 0
-        
-    except Exception as e:
-        print(f"❌ Validation failed: {str(e)}")
-        return 1
 
 
 def command_config(args, settings: Settings):
@@ -320,11 +195,10 @@ def command_config(args, settings: Settings):
         print(f"  • OpenAI Endpoint: {settings.azure_openai_endpoint}")
         print(f"  • Deployment Name: {settings.azure_openai_deployment_name}")
         print(f"  • Embedding Deployment: {settings.azure_openai_embedding_deployment_name}")
-        print(f"  • Default Batch Size: {settings.default_batch_size}")
+        print(f"  • Batch Size: {settings.batch_size}")
         print(f"  • Max Tokens: {settings.max_tokens}")
         print(f"  • API Temperature: {settings.api_temperature}")
-        print(f"  • Theme Similarity: {settings.enable_theme_similarity}")
-        print(f"  • Caching: {settings.enable_caching}")
+        print(f"  • Similarity Threshold: {settings.similarity_threshold}")
         return 0
         
     elif args.config_action == 'test':
@@ -360,12 +234,6 @@ def main():
         # Route to appropriate command handler
         if args.command == 'analyze':
             return command_analyze(args, settings)
-        elif args.command == 'preview':
-            return command_preview(args, settings)
-        elif args.command == 'test-connection':
-            return command_test_connection(args, settings)
-        elif args.command == 'validate':
-            return command_validate(args, settings)
         elif args.command == 'config':
             return command_config(args, settings)
         else:

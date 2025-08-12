@@ -1,7 +1,6 @@
 """Data models and structures."""
 
-from .theme import Theme, ThemeHierarchy
+from .theme import SimpleThemeManager
 from .analysis_result import AnalysisResult, BatchResult
-from .batch import Batch, BatchConfig
 
-__all__ = ["Theme", "ThemeHierarchy", "AnalysisResult", "BatchResult", "Batch", "BatchConfig"]
+__all__ = ["SimpleThemeManager", "AnalysisResult", "BatchResult"]

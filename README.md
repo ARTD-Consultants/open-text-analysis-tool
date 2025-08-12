@@ -4,9 +4,10 @@ An AI-powered framework for analyzing open-text survey responses and qualitative
 
 ## Features
 
+- **Two-Step Theme Generation**: Initial themes from chunked API calls, then consolidated using GPT-4
 - **Intelligent Batch Processing**: Dynamic batch sizing based on text length and token usage
 - **Theme Consistency**: Automatic theme validation and merging using semantic similarity
-- **Hierarchical Themes**: Organize themes in parent-child relationships
+- **Advanced Consolidation**: GPT-4 powered theme consolidation into configurable final counts
 - **Caching System**: Intelligent caching to reduce API costs and processing time  
 - **Comprehensive Reports**: Generate Word documents, Excel summaries, and visualizations
 - **Progress Tracking**: Real-time progress monitoring with detailed statistics
@@ -68,11 +69,11 @@ qualitative-analyzer analyze survey.xlsx --text-column "responses"
 # With comprehensive report
 qualitative-analyzer analyze survey.xlsx --text-column "responses" --report
 
-# Preview your data first
-qualitative-analyzer preview survey.xlsx
+# With custom consolidation settings
+qualitative-analyzer analyze survey.xlsx --text-column "responses" --final-theme-count 15
 
-# Test your API connection
-qualitative-analyzer test-connection
+# Disable theme consolidation
+qualitative-analyzer analyze survey.xlsx --text-column "responses" --no-consolidation
 
 # Get help
 qualitative-analyzer --help
@@ -88,8 +89,6 @@ cd /path/to/qualitative-text-analyzer
 
 # Then run commands
 python run_analyzer.py analyze data.xlsx --text-column "response"
-python run_analyzer.py preview data.xlsx
-python run_analyzer.py test-connection
 ```
 
 ### Python API
@@ -121,17 +120,49 @@ print("Top themes:", summary['top_themes'])
 The system uses environment variables for configuration. Copy `.env.example` to `.env` and configure:
 
 ```bash
-# Azure OpenAI Configuration
+# Azure OpenAI Configuration (Required)
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-2
 AZURE_OPENAI_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
 AZURE_OPENAI_API_KEY=your-api-key-here
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME=text-embedding-ada-002
+AZURE_API_VERSION=2024-10-21
 
-# Analysis Configuration
-DEFAULT_BATCH_SIZE=15
-MAX_TOKENS=4000
+# Essential Analysis Settings
+BATCH_SIZE=25
+MAX_TOKENS=20000
+SIMILARITY_THRESHOLD=0.85
+MAX_THEMES_PER_TEXT=3
 API_TEMPERATURE=0.5
-THEME_SIMILARITY_THRESHOLD=0.85
+
+# Theme Consolidation
+FINAL_THEME_COUNT=10
+CONSOLIDATION_DEPLOYMENT=gpt-4o
+CONSOLIDATION_TEMPERATURE=0.3
+CONSOLIDATION_MAX_TOKENS=1000
+ENABLE_THEME_CONSOLIDATION=true
+
+# OpenAI Client Settings
+OPENAI_MAX_RETRIES=3
+OPENAI_RETRY_DELAY=5
+OPENAI_TIMEOUT=60
+BACKOFF_FACTOR=2.0
+BACKOFF_MAX_TRIES=3
+
+# Theme Processing
+THEME_MAPPING_TEMPERATURE=0.2
+THEME_MAPPING_MAX_TOKENS=1000
+THEME_MAPPING_CHUNK_SIZE=20
+THEME_ANALYSIS_MAX_WORDS=1000
+MAX_THEME_EXAMPLES=30
+MAX_REPRESENTATIVE_QUOTES=5
+
+# Data Processing
+MIN_TEXT_LENGTH=5
+DATA_ENCODING=utf-8
+
+# Display Settings
+TOP_THEMES_DISPLAY_COUNT=5
+THEME_THRESHOLD_FOR_DISPLAY=10
 
 # Features
 ENABLE_THEME_SIMILARITY=true
@@ -166,6 +197,29 @@ The analyzer generates multiple output formats:
    - Confidence vs frequency plots
    - Distribution analyses
 
+## Two-Step Theme Generation Process
+
+The analyzer uses a sophisticated two-step approach for theme generation:
+
+### Step 1: Initial Theme Generation
+- Text data is processed in optimized batches
+- Each batch generates detailed themes using Azure OpenAI
+- Themes are extracted with confidence scores
+- Basic similarity checking consolidates obvious duplicates
+
+### Step 2: Advanced Consolidation (GPT-4)
+- All generated themes are collected from Step 1
+- GPT-4 analyzes the complete theme set
+- Creates a specified number of broader, consolidated themes (default: 10)
+- Maps original themes to consolidated themes
+- Results include both original and consolidated themes
+
+This approach ensures:
+- **Comprehensive coverage**: Initial analysis captures all nuanced themes
+- **Meaningful consolidation**: GPT-4 creates coherent, actionable theme categories
+- **Flexibility**: Configurable final theme count based on analysis needs
+- **Transparency**: Both original and consolidated themes are preserved
+
 ## Advanced Features
 
 ### Theme Management
@@ -187,11 +241,7 @@ analyzer.theme_manager.create_theme_hierarchy(
 ### Caching and Performance
 
 ```python
-# Get cache statistics
-cache_stats = analyzer.cache_manager.get_cache_statistics()
-print(f"Cache hit rate: {cache_stats['cache_hit_rate']:.1%}")
-
-# Clear cache
+# Clear cache if needed
 analyzer.cache_manager.clear_cache()
 ```
 
@@ -239,9 +289,6 @@ qualitative_analyzer/
 ```bash
 # Test your configuration
 python -m qualitative_analyzer config test
-
-# Validate your input file
-python -m qualitative_analyzer validate data.xlsx --text-column response
 
 # View current configuration
 python -m qualitative_analyzer config show

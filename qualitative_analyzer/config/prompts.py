@@ -41,12 +41,13 @@ Format:
         theme: str, 
         text_entries: List[str], 
         total_entries: int,
-        max_words: int = 1000
+        max_words: int = 1000,
+        max_examples: int = 30
     ) -> str:
         """Create prompt for detailed theme analysis."""
         
         # Limit examples to avoid token overflow
-        max_examples = min(30, len(text_entries))
+        max_examples = min(max_examples, len(text_entries))
         examples = text_entries[:max_examples]
         remaining_count = total_entries - max_examples
         
@@ -72,12 +73,13 @@ Base analysis only on the provided data. Do not make unsupported claims."""
     def quote_extraction_prompt(
         theme: str,
         text_entries: List[str],
-        max_quotes: int = 5
+        max_quotes: int = 5,
+        max_examples: int = 30
     ) -> str:
         """Create prompt for extracting representative quotes."""
         
         # Limit entries to manage token usage
-        sample_size = min(30, len(text_entries))
+        sample_size = min(max_examples, len(text_entries))
         sample_entries = text_entries[:sample_size]
         
         entries_text = "\\n".join([f'- "{entry}"' for entry in sample_entries])
@@ -116,46 +118,6 @@ Answer: Yes/No
 Confidence: 0-100%
 Reason: Brief explanation"""
 
-    @staticmethod
-    def confidence_scoring_prompt(texts: List[str]) -> str:
-        """Create prompt that includes confidence scoring."""
-        
-        entries = ""
-        for i, text in enumerate(texts, 1):
-            entries += f"{i}: {text}\\n"
-        
-        return f"""Analyze texts for themes with confidence scores (0-100%).
-
-Format: Summary|Theme1(confidence%),Theme2(confidence%)
-
-Texts:
-{entries}
-
-Output:
-1: Summary here|Theme1(85%),Theme2(92%)
-2: Summary here|Theme1(78%)
-..."""
-
-    @staticmethod
-    def representative_themes_creation_prompt(
-        original_themes: list, 
-        num_representative_themes: int = 10
-    ) -> str:
-        """Create prompt for generating representative themes from original themes."""
-        
-        theme_count = len(original_themes)
-        themes_text = ', '.join(original_themes)
-        
-        return f"""Analyze these {theme_count} themes and create exactly {num_representative_themes} broad, inclusive themes that capture their diversity:
-
-{themes_text}
-
-Create {num_representative_themes} comprehensive categories that most themes would fit into. Make them:
-1. Broad enough to capture multiple similar themes
-2. Specific enough to be meaningful
-3. Cover the full range of concepts present in the data
-
-Return only the {num_representative_themes} theme names, one per line."""
 
     @staticmethod
     def theme_mapping_prompt(
@@ -180,3 +142,38 @@ Original Theme 2 -> Representative Theme
 ...
 
 Use the exact representative theme names provided above."""
+
+    @staticmethod
+    def theme_consolidation_prompt(
+        original_themes: List[str],
+        final_theme_count: int = 10
+    ) -> str:
+        """Create comprehensive prompt for consolidating themes using GPT-4."""
+        
+        themes_text = '\n'.join([f"- {theme}" for theme in original_themes])
+        theme_count = len(original_themes)
+        
+        return f"""You are analyzing qualitative research data. Below are {theme_count} themes that were generated from text analysis. Your task is to consolidate these into exactly {final_theme_count} broader, more meaningful themes.
+
+ORIGINAL THEMES ({theme_count} total):
+{themes_text}
+
+INSTRUCTIONS:
+1. Create exactly {final_theme_count} consolidated themes
+2. Each consolidated theme should:
+   - Capture multiple related original themes
+   - Be broad enough to be meaningful but specific enough to be actionable
+   - Use clear, descriptive names (2-4 words)
+   - Cover the full conceptual range of the data
+
+3. Ensure all major concepts from the original themes are represented
+4. Prioritize themes that appear most frequently or are most significant
+
+RESPONSE FORMAT:
+Provide exactly {final_theme_count} consolidated theme names, one per line:
+1. [Consolidated Theme Name]
+2. [Consolidated Theme Name]
+...
+{final_theme_count}. [Consolidated Theme Name]
+
+Only return the numbered list of consolidated theme names."""
