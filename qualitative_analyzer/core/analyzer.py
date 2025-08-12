@@ -7,6 +7,8 @@ from typing import Dict, Any, List, Optional, Callable
 import pandas as pd
 from tqdm import tqdm
 import re
+from collections import Counter
+from pathlib import Path
 
 from ..config.settings import Settings
 from ..config.prompts import Prompts
@@ -414,7 +416,13 @@ class QualitativeAnalyzer:
         if file_ext == '.csv':
             results_df.to_csv(output_file, index=False)
         else:
-            results_df.to_excel(output_file, index=False)
+            # Save to Excel with multiple sheets including summary and charts
+            output_path = Path(output_file)
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                results_df.to_excel(writer, sheet_name='Analysis Results', index=False)
+                
+                # Add summary sheet with statistics and charts
+                self._create_summary_sheet(writer, all_results)
         
         logger.info(f"Analysis results saved to {output_file}")
     
@@ -584,4 +592,125 @@ class QualitativeAnalyzer:
                     mapping[theme] = consolidated_themes[0] if consolidated_themes else "Uncategorized"
         
         return mapping
+    
+    def _create_summary_sheet(self, writer, all_results: List[AnalysisResult]):
+        """Create comprehensive summary sheet with statistics and visualizations."""
+        
+        # Collect theme counts
+        original_themes = []
+        consolidated_themes = []
+        
+        for result in all_results:
+            original_themes.extend(result.themes)
+            if result.consolidated_themes:
+                consolidated_themes.extend(result.consolidated_themes)
+        
+        # Remove NA themes
+        original_themes = [t for t in original_themes if t != "NA"]
+        consolidated_themes = [t for t in consolidated_themes if t != "NA"]
+        
+        # Count themes
+        original_counts = Counter(original_themes)
+        consolidated_counts = Counter(consolidated_themes)
+        
+        # Create summary statistics
+        stats_data = [
+            ["Analysis Summary", ""],
+            ["Total Entries Processed", len(all_results)],
+            ["", ""],
+            ["Original Themes", ""],
+            ["Total Original Theme Occurrences", len(original_themes)],
+            ["Unique Original Themes", len(original_counts)],
+            ["Most Common Original Theme", original_counts.most_common(1)[0] if original_counts else ("None", 0)],
+            ["", ""],
+            ["Consolidated Themes", ""],
+            ["Total Consolidated Theme Occurrences", len(consolidated_themes)],
+            ["Unique Consolidated Themes", len(consolidated_counts)],
+            ["Most Common Consolidated Theme", consolidated_counts.most_common(1)[0] if consolidated_counts else ("None", 0)],
+            ["", ""],
+            ["Processing Statistics", ""],
+            ["Average Themes per Entry (Original)", len(original_themes) / len(all_results) if all_results else 0],
+            ["Average Themes per Entry (Consolidated)", len(consolidated_themes) / len(all_results) if all_results else 0],
+            ["Theme Consolidation Ratio", f"{len(original_counts)} → {len(consolidated_counts)}" if consolidated_counts else "Not applied"],
+        ]
+        
+        # Create summary DataFrame
+        summary_df = pd.DataFrame(stats_data, columns=['Metric', 'Value'])
+        summary_df.to_excel(writer, sheet_name='Summary', index=False, startrow=0, startcol=0)
+        
+        # Create original themes count table
+        if original_counts:
+            original_df = pd.DataFrame([
+                (theme, count) for theme, count in original_counts.most_common()
+            ], columns=['Original Theme', 'Count'])
+            original_df.to_excel(writer, sheet_name='Summary', index=False, startrow=0, startcol=4)
+        
+        # Create consolidated themes count table
+        if consolidated_counts:
+            consolidated_df = pd.DataFrame([
+                (theme, count) for theme, count in consolidated_counts.most_common()
+            ], columns=['Consolidated Theme', 'Count'])
+            consolidated_df.to_excel(writer, sheet_name='Summary', index=False, startrow=0, startcol=7)
+        
+        # Add charts
+        self._add_theme_charts(writer, original_counts, consolidated_counts)
+    
+    def _add_theme_charts(self, writer, original_counts: Counter, consolidated_counts: Counter):
+        """Add charts to the summary sheet."""
+        try:
+            from openpyxl.chart import BarChart, Reference
+            from openpyxl.chart.label import DataLabelList
+            
+            worksheet = writer.sheets['Summary']
+            
+            # Original themes chart (top 15)
+            if original_counts:
+                top_original = dict(original_counts.most_common(15))
+                
+                # Create chart
+                chart1 = BarChart()
+                chart1.type = "col"
+                chart1.style = 10
+                chart1.title = "Top 15 Original Themes"
+                chart1.x_axis.title = "Themes"
+                chart1.y_axis.title = "Count"
+                
+                # Data range for original themes (assuming they start at column E)
+                data = Reference(worksheet, min_col=6, min_row=1, max_row=min(16, len(top_original)+1), max_col=6)
+                cats = Reference(worksheet, min_col=5, min_row=2, max_row=min(16, len(top_original)+1))
+                
+                chart1.add_data(data, titles_from_data=True)
+                chart1.set_categories(cats)
+                chart1.dataLabels = DataLabelList()
+                chart1.dataLabels.showVal = True
+                
+                # Position chart
+                worksheet.add_chart(chart1, "A25")
+            
+            # Consolidated themes chart
+            if consolidated_counts:
+                # Create chart
+                chart2 = BarChart()
+                chart2.type = "col"
+                chart2.style = 11
+                chart2.title = "Consolidated Themes Distribution"
+                chart2.x_axis.title = "Themes"
+                chart2.y_axis.title = "Count"
+                
+                # Data range for consolidated themes (assuming they start at column H)
+                data = Reference(worksheet, min_col=9, min_row=1, max_row=len(consolidated_counts)+1, max_col=9)
+                cats = Reference(worksheet, min_col=8, min_row=2, max_row=len(consolidated_counts)+1)
+                
+                chart2.add_data(data, titles_from_data=True)
+                chart2.set_categories(cats)
+                chart2.dataLabels = DataLabelList()
+                chart2.dataLabels.showVal = True
+                
+                # Position chart
+                worksheet.add_chart(chart2, "K25")
+                
+        except ImportError:
+            logger.warning("openpyxl chart functionality not available - charts will not be created")
+        except Exception as e:
+            logger.warning(f"Failed to create charts: {str(e)}")
     

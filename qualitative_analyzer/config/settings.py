@@ -72,12 +72,7 @@ class Settings:
         else:
             load_dotenv()
         
-        # Debug: Print the loaded values
-        print(f"DEBUG: FINAL_THEME_COUNT from env: {os.getenv('FINAL_THEME_COUNT', 'NOT_SET')}")
-        print(f"DEBUG: CONSOLIDATION_MAX_TOKENS from env: {os.getenv('CONSOLIDATION_MAX_TOKENS', 'NOT_SET')}")
-        print(f"DEBUG: CONSOLIDATION_DEPLOYMENT from env: {os.getenv('CONSOLIDATION_DEPLOYMENT', 'NOT_SET')}")
-            
-        return cls(
+        settings_obj = cls(
             azure_openai_api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
             azure_openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
             azure_openai_deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o-2"),
@@ -110,6 +105,7 @@ class Settings:
             default_text_column=os.getenv("DEFAULT_TEXT_COLUMN", "text"),
             api_temperature=float(os.getenv("API_TEMPERATURE", "0.5"))
         )
+        return settings_obj
     
     def validate(self) -> None:
         """Validate configuration settings."""

@@ -261,6 +261,7 @@ class OpenAIClient:
             final_theme_count = self.settings.final_theme_count
         if consolidation_deployment is None:
             consolidation_deployment = self.settings.consolidation_deployment
+        
             
         prompt = Prompts.theme_consolidation_prompt(original_themes, final_theme_count)
         

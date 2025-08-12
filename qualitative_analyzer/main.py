@@ -64,8 +64,8 @@ Examples:
                                help='Disable caching')
     analyze_parser.add_argument('--no-similarity', action='store_true',
                                help='Disable theme similarity checking')
-    analyze_parser.add_argument('--final-theme-count', type=int, default=10,
-                               help='Number of final consolidated themes (default: 10)')
+    analyze_parser.add_argument('--final-theme-count', type=int, default=None,
+                               help='Number of final consolidated themes (uses .env setting if not specified)')
     analyze_parser.add_argument('--no-consolidation', action='store_true',
                                help='Disable GPT-4 theme consolidation')
     
@@ -99,8 +99,8 @@ def command_analyze(args, settings: Settings):
         return 1
     
     try:
-        # Override settings with command-line arguments
-        if hasattr(args, 'final_theme_count'):
+        # Override settings with command-line arguments (only if explicitly provided)
+        if hasattr(args, 'final_theme_count') and args.final_theme_count is not None:
             settings.final_theme_count = args.final_theme_count
         if hasattr(args, 'no_consolidation'):
             settings.enable_theme_consolidation = not args.no_consolidation
@@ -127,23 +127,6 @@ def command_analyze(args, settings: Settings):
             progress_callback=progress_callback
         )
         
-        # Print summary
-        stats = session.get_session_statistics()
-        print("\\n📊 Analysis Summary:")
-        print(f"  • Entries processed: {stats['total_entries']}")
-        print(f"  • Unique themes found: {stats['unique_themes']}")
-        print(f"  • Processing time: {stats.get('session_duration', 0):.1f} seconds")
-        print(f"  • Average themes per entry: {stats['average_themes_per_entry']:.1f}")
-        print(f"  • Overall confidence: {stats['overall_confidence']:.1%}")
-        
-        # Show top themes
-        theme_summary = session.get_global_theme_summary()
-        print("\\n🏷️  Top Themes:")
-        sorted_themes = sorted(theme_summary.items(), key=lambda x: x[1], reverse=True)
-        top_count = settings.top_themes_display_count
-        for i, (theme_name, count) in enumerate(sorted_themes[:top_count], 1):
-            print(f"  {i}. {theme_name} ({count} occurrences)")
-        
         # Generate report if requested
         if args.report:
             print("\\n📄 Generating comprehensive report...")
@@ -152,27 +135,6 @@ def command_analyze(args, settings: Settings):
             print("Reports generated:")
             for report_type, file_path in report_files.items():
                 print(f"  • {report_type.capitalize()}: {file_path}")
-        
-        # Show consolidated theme statistics if consolidation was enabled
-        all_results = session.get_all_results()
-        if all_results and all_results[0].consolidated_themes:
-            # Count consolidated themes
-            consolidated_theme_counts = {}
-            for result in all_results:
-                for theme in result.consolidated_themes:
-                    consolidated_theme_counts[theme] = consolidated_theme_counts.get(theme, 0) + 1
-            
-            print("\\n📊 Top Consolidated Themes:")
-            sorted_consolidated = sorted(consolidated_theme_counts.items(), key=lambda x: x[1], reverse=True)
-            for i, (theme_name, count) in enumerate(sorted_consolidated[:settings.top_themes_display_count], 1):
-                print(f"  {i}. {theme_name} ({count} occurrences)")
-            
-            print(f"\\n📈 Theme consolidation: {len(theme_summary)} original → {len(consolidated_theme_counts)} consolidated themes")
-        
-        # Show theme statistics
-        theme_summary = session.get_global_theme_summary()
-        if len(theme_summary) > settings.theme_threshold_for_display:
-            print(f"\\n📈 Found {len(theme_summary)} unique original themes total")
         
         if args.output:
             print(f"\\n✅ Results saved to: {args.output}")
