@@ -613,6 +613,17 @@ class QualitativeAnalyzer:
         original_counts = Counter(original_themes)
         consolidated_counts = Counter(consolidated_themes)
         
+        # Calculate token and batch statistics from current session
+        session_stats = self.current_session.get_session_statistics() if self.current_session else {}
+        total_tokens = session_stats.get('total_tokens_used', 0)
+        total_batches = len(self.current_session.batches) if self.current_session else 0
+        avg_tokens_per_batch = total_tokens / total_batches if total_batches > 0 else 0
+        
+        # Calculate batch size statistics
+        batch_sizes = [len(batch.results) for batch in self.current_session.batches] if self.current_session else []
+        avg_batch_size = sum(batch_sizes) / len(batch_sizes) if batch_sizes else 0
+        configured_batch_size = self.settings.batch_size
+        
         # Create summary statistics
         stats_data = [
             ["Analysis Summary", ""],
@@ -632,6 +643,12 @@ class QualitativeAnalyzer:
             ["Average Themes per Entry (Original)", len(original_themes) / len(all_results) if all_results else 0],
             ["Average Themes per Entry (Consolidated)", len(consolidated_themes) / len(all_results) if all_results else 0],
             ["Theme Consolidation Ratio", f"{len(original_counts)} → {len(consolidated_counts)}" if consolidated_counts else "Not applied"],
+            ["Total Tokens Used", total_tokens],
+            ["Total Batches Processed", total_batches], 
+            ["Average Tokens per Batch", f"{avg_tokens_per_batch:.0f}" if avg_tokens_per_batch > 0 else "N/A"],
+            ["Configured Batch Size (.env)", configured_batch_size],
+            ["Actual Average Batch Size", f"{avg_batch_size:.1f}" if avg_batch_size > 0 else "N/A"],
+            ["Batch Sizes", ", ".join(map(str, batch_sizes)) if batch_sizes else "N/A"],
         ]
         
         # Create summary DataFrame

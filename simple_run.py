@@ -67,7 +67,7 @@ def main():
             else:
                 print("❌ Invalid choice!")
                 return
-        except ValueError:
+        except ValueError:  
             print("❌ Please enter a number!")
             return
     
