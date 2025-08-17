@@ -624,6 +624,11 @@ class QualitativeAnalyzer:
         avg_batch_size = sum(batch_sizes) / len(batch_sizes) if batch_sizes else 0
         configured_batch_size = self.settings.batch_size
         
+        # Get prompts used for transparency
+        from ..config.prompts import Prompts
+        initial_prompt = Prompts.batch_analysis_prompt(["[sample text]"], max_themes=3).replace("\n", " | ")
+        consolidation_prompt = Prompts.theme_consolidation_prompt(["[sample themes]"], final_theme_count=15).replace("\n", " | ")
+        
         # Create summary statistics
         stats_data = [
             ["Analysis Summary", ""],
@@ -649,6 +654,10 @@ class QualitativeAnalyzer:
             ["Configured Batch Size (.env)", configured_batch_size],
             ["Actual Average Batch Size", f"{avg_batch_size:.1f}" if avg_batch_size > 0 else "N/A"],
             ["Batch Sizes", ", ".join(map(str, batch_sizes)) if batch_sizes else "N/A"],
+            ["", ""],
+            ["Prompts Used", ""],
+            ["Initial Theme Analysis Prompt", initial_prompt],
+            ["Theme Consolidation Prompt", consolidation_prompt],
         ]
         
         # Create summary DataFrame

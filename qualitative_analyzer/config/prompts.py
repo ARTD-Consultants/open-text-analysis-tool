@@ -26,8 +26,8 @@ class Prompts:
         
         return f"""Analyze texts for themes and summaries. Output format: Summary|Theme1,Theme2,Theme3
         
-Max {max_themes} themes per text. Keep theme names concise (1-3 words).{theme_guidance}
-
+Max {max_themes} themes per text. Themes should descriptive and detailed -  up to 15 words.{theme_guidance}
+For context, these are responses to the question: "Was there any knowledge, skills or support that you were hoping to get from Jobs Academy but you feel you didn't receive?"
 Texts:
 {entries}
 
@@ -161,13 +161,15 @@ ORIGINAL THEMES ({theme_count} total):
 INSTRUCTIONS:
 1. Create exactly {final_theme_count} consolidated themes
 2. Each consolidated theme should:
-   - Capture multiple related original themes
-   - Be broad enough to be meaningful but specific enough to be actionable
-   - Use clear, descriptive names (2-4 words)
+   - Capture related original themes
+   - Be descriptive in your naming of the themes - they can be up to 15 words if necessary
    - Cover the full conceptual range of the data
+
+   For context, these themes were extracted from responses to the question: "Was there any knowledge, skills or support that you were hoping to get from Jobs Academy but you feel you didn't receive?"
 
 3. Ensure all major concepts from the original themes are represented
 4. Prioritize themes that appear most frequently or are most significant
+5. Use sentence-style capitalisation and Australian spelling
 
 RESPONSE FORMAT:
 Provide exactly {final_theme_count} consolidated theme names, one per line:
